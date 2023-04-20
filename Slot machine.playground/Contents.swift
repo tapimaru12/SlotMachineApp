@@ -1,13 +1,18 @@
 class SlotMachine {
     // 投入金額
     var inputedMoney = 0
-    // 投入金額の保管
-    var setMoney = 0
     
-    // 各レーンの絵柄
-    var reelMark: [String] = ["🔔", "🔔", "🌺", "🌺", "🍎", "🍎", "👾", "👾", "🍬", "🍬", "🎱", "🎱", "🎁", "🎁", "🦄", "💎", "💰"]
+    // ストップボタンが押せるかどうか
+    // setMoneyからシンプルなフラグに変更
+    var tappableStopButton = false
     
-    // リールのデフォルト状態
+    // 絵柄
+    let reelMark: [String] = ["🔔", "🔔", "🌺", "🌺", "🍎", "🍎", "👾", "👾", "🍬", "🍬", "🎱", "🎱", "🎁", "🎁", "🦄", "💎", "💰"]
+    
+    // 各リールのデフォルト状態
+    let defaultReel: [String] = ["", "", ""]
+    
+    // 各リールのデフォルト状態
     var leftReel: [String] = ["", "", ""]
     var centerReel: [String] = ["", "", ""]
     var rightReel: [String] = ["", "", ""]
@@ -25,26 +30,25 @@ class SlotMachine {
     func startPlaying(inputedMoney: Int) {
         if inputedMoney > 1000 {
             // 一度の投入金額が1000円を超えていた場合
-            print("投入金額は一度に1000円までとなっております。")
+            print("投入上限金額は1000円までとなっております。")
             
         } else if inputedMoney < 100 {
             // 一度の投入金額が100円未満だった場合
             print("無効な硬貨：\(inputedMoney)円")
             
-        } else if self.inputedMoney < 1000 {
-            // 既に投入された金額が1000円未満かつ、上記2つも網羅した場合
-            // 受け入れ可能な硬貨とお釣りを識別する
-            var num = Double(inputedMoney) * 0.01
-            var change: Int = inputedMoney % 100
-            self.inputedMoney += Int(num.rounded(.down) * 100)
-            self.setMoney = self.inputedMoney
+        } else {
+            // 投入された金額が100円以上1000円未満だった場合
+            // 投入可能な硬貨かどうかを識別する
+            var change = inputedMoney % 100 // changeは99円以下
+            self.inputedMoney = inputedMoney - change
             
             // お釣りを出す
             if self.inputedMoney > 1000 {
-                // 既に投入された金額と今投入した金額が合わせて1000円以上になってしまった場合
+                // 既に投入された金額と追加で投入した金額が合わせて1000円を超えてしまった場合
                 change += self.inputedMoney - 1000
                 self.inputedMoney = 1000
-                print("無効な硬貨：\(change)円")
+                print("投入上限金額の1000円を超えたため返金します：\(change)円")
+                
             } else if change != 0 {
                 // シンプルにお釣りがあった場合
                 print("無効な硬貨：\(change)円")
@@ -58,55 +62,43 @@ class SlotMachine {
     
     // プレイ可能状態にする(リール回転スタート)
     func tappedStartButton() {
-        if inputedMoney >= 100, leftReel == ["", "", ""] && centerReel == ["", "", ""] && rightReel == ["", "", ""] {
-            setMoney = inputedMoney
+        if inputedMoney >= 100, leftReel == defaultReel && centerReel == defaultReel && rightReel == defaultReel {
             inputedMoney -= 100
             leftReel = playable
             centerReel = playable
             rightReel = playable
+            tappableStopButton = true
         }
     }
     
     
-    // 左のストップボタン(左レーンの絵柄が確定していない時のみ有効)
-    func tappedLeftStopButton() {
-        if setMoney >= 100, leftReel == playable {
+    // ストップボタン
+    func tappedStopButton(target: String) {
+        // 当メソッドの引数にinoutを適用すると、メソッド呼び出し時に各リールを引数に取れなかった(スコープ外)ため、ワンクッション入れる
+        var targetReel = defaultReel
+        
+        // 下のif文で、押されたボタンのリールがプレイ可能状態かどうかを判別するため、switch文で引数を用いて判別対象を決めている
+        switch target {
+        case "left": targetReel = leftReel
+        case "center": targetReel = centerReel
+        case "right": targetReel = rightReel
+        default: targetReel = leftReel
+        }
+        
+        if tappableStopButton, targetReel == playable {
             // 絵柄を確定する
-            leftReel = tappedStopButton(reel: &leftReel)
-            // 全レーンの絵柄を表示する
-            result()
-            // 絵柄が出揃ったら最終結果を表示する
-            if leftReel != ["", "", ""] && centerReel != ["", "", ""] && rightReel != ["", "", ""],
-               leftReel != playable && centerReel != playable && rightReel != playable {
-                score()
+            // 変数targetReelを用意しワンクッション入れたため、getResultReelメソッドを呼び出した際に代入先となる変数が各リールではなく、targetReelになってしまっている。
+            // そのため再度引数のtargetを用いてswitch文で代入先を判別し、メソッドを呼び出している。
+            switch target {
+            case "left": leftReel = getResultReel(reel: &targetReel)
+            case "center": centerReel = getResultReel(reel: &targetReel)
+            case "right": rightReel = getResultReel(reel: &targetReel)
+            default: leftReel = getResultReel(reel: &targetReel)
             }
-        }
-    }
-    
-    // 中央のストップボタン(中央レーンの絵柄が確定していない時のみ有効)
-    func tappedCenterStopButton() {
-        if setMoney >= 100, centerReel == playable {
-            // 絵柄を確定する
-            centerReel = tappedStopButton(reel: &centerReel)
-            // 全レーンの絵柄を表示する
+            // 全リールの絵柄を表示する
             result()
             // 絵柄が出揃ったら最終結果を表示する
-            if leftReel != ["", "", ""] && centerReel != ["", "", ""] && rightReel != ["", "", ""],
-               leftReel != playable && centerReel != playable && rightReel != playable {
-                score()
-            }
-        }
-    }
-    
-    // 右のストップボタン(右レーンの絵柄が確定していない時のみ有効)
-    func tappedRightStopButton() {
-        if setMoney >= 100, rightReel == playable {
-            // 絵柄を確定する
-            rightReel = tappedStopButton(reel: &rightReel)
-            // 全レーンの絵柄を表示する
-            result()
-            // 絵柄が出揃ったら最終結果を表示する
-            if leftReel != ["", "", ""] && centerReel != ["", "", ""] && rightReel != ["", "", ""],
+            if leftReel != defaultReel && centerReel != defaultReel && rightReel != defaultReel,
                leftReel != playable && centerReel != playable && rightReel != playable {
                 score()
             }
@@ -116,18 +108,20 @@ class SlotMachine {
     
     // リセットボタンを押した時の処理(全ての絵柄が出揃っている時のみ有効)
     func tappedResetButton() {
-        if leftReel != ["", "", ""] && centerReel != ["", "", ""] && rightReel != ["", "", ""],
+        if leftReel != defaultReel && centerReel != defaultReel && rightReel != defaultReel,
            leftReel != playable && centerReel != playable && rightReel != playable {
             if inputedMoney >= 100 {
-                setMoney = inputedMoney
+                // 投入金額が100円以上の場合は再プレイ
                 inputedMoney -= 100
                 leftReel = playable
                 centerReel = playable
                 rightReel = playable
             } else {
-                leftReel = ["", "", ""]
-                centerReel = ["", "", ""]
-                rightReel = ["", "", ""]
+                // 投入金額が0円の場合はリールを初期値の戻す
+                leftReel = defaultReel
+                centerReel = defaultReel
+                rightReel = defaultReel
+                tappableStopButton = false
             }
             
             print("- Reset -")
@@ -137,26 +131,24 @@ class SlotMachine {
     
     // 返金ボタンを押した時の処理(全ての絵柄が)
     func tappedRefundButton() {
-        if inputedMoney >= 100 && leftReel == playable && centerReel == playable && rightReel == playable {
+        if inputedMoney != 0, leftReel != defaultReel && centerReel != defaultReel && rightReel != defaultReel,
+           leftReel == playable && centerReel == playable && rightReel == playable {
             print("返金額：\(inputedMoney)")
             inputedMoney = 0
         }
     }
-    
 }
 
 
-// スロットボタン押下時の処理
+// ストップボタンを押した時の処理
 extension SlotMachine {
-    // ストップボタンを押した時の処理
-    func tappedStopButton(reel: inout [String]) -> [String] {
-        var reel = reel
+    func getResultReel(reel: inout [String]) -> [String] {
         // 一度選ばれた要素のインデックス番号を保管(同じ要素が出力されないよう比較する)
         var stock: [Int] = []
-        // レーンの代入先(インデックス)
+        // リールの代入先(インデックス)
         var i = 0
         
-        // レーンの絵柄に❔がなくなるまでループする(レーンの絵柄が全て確定するまで)
+        // リールの絵柄に❔がなくなるまでループする(リールの絵柄が全て確定するまで)
         while reel.contains("❔") {
             // 一つの絵柄(インデックス)を取得
             let num = Int.random(in: 0...reelMark.count - 1)
@@ -176,7 +168,8 @@ extension SlotMachine {
         return reel
     }
     
-    // 全レーンの絵柄を表示する
+    
+    // 全リールの絵柄を表示する
     func result() {
         print("ーーーーーーーー")
         print("\(leftReel[0])   \(centerReel[0])   \(rightReel[0])")
@@ -184,6 +177,7 @@ extension SlotMachine {
         print("\(leftReel[2])   \(centerReel[2])   \(rightReel[2])")
         print("ーーーーーーーー")
     }
+    
     
     // 各ラインのビンゴ&リーチ判定(全ての絵柄が出揃っている時のみ有効)
     func score() {
@@ -225,10 +219,9 @@ extension SlotMachine {
         // ビンゴもリーチもない場合
         if bingo == 0 && reach == 0 { print("残念！") }
         
+        // ビンゴとリーチの値をリセット
         bingo = 0
         reach = 0
-        
-        setMoney = inputedMoney
         
         print("残金：\(inputedMoney)円")
         
@@ -244,38 +237,23 @@ extension SlotMachine {
 
 
 
-
 let slotMachine = SlotMachine()
 
 // 金額投入
-slotMachine.startPlaying(inputedMoney: 300)
+slotMachine.startPlaying(inputedMoney: 200)
 slotMachine.tappedStartButton()
 
+
 // 左→中→右
-slotMachine.tappedLeftStopButton()
-slotMachine.tappedCenterStopButton()
-slotMachine.tappedRightStopButton()
+slotMachine.tappedStopButton(target: "left")
+slotMachine.tappedStopButton(target: "center")
+slotMachine.tappedStopButton(target: "right")
 
 slotMachine.tappedResetButton()
+
 
 // 右→中→左
-slotMachine.tappedRightStopButton()
-slotMachine.tappedCenterStopButton()
-slotMachine.tappedLeftStopButton()
-
-slotMachine.tappedResetButton()
-
-// 中→左→右
-slotMachine.tappedCenterStopButton()
-slotMachine.tappedLeftStopButton()
-slotMachine.tappedRightStopButton()
-
-slotMachine.tappedResetButton()
-
-// 中→右→左
-slotMachine.tappedCenterStopButton()
-slotMachine.tappedRightStopButton()
-slotMachine.tappedLeftStopButton()
-
-slotMachine.tappedResetButton()
+slotMachine.tappedStopButton(target: "right")
+slotMachine.tappedStopButton(target: "center")
+slotMachine.tappedStopButton(target: "left")
 
